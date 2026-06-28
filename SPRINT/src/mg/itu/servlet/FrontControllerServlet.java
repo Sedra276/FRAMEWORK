@@ -37,34 +37,26 @@ public class FrontControllerServlet extends HttpServlet {
                                 basePackage,
                                 Controller.class);
 
-                for(Class<?> c : classes) {
+              for(Class<?> c : classes){
 
-                    // Sprint 1
-                    controllers.add(c.getName());
+    controllers.add(c.getName());
 
-                    // Sprint 2
-                    Method[] methods =
-                            c.getDeclaredMethods();
+    for(Method m : c.getDeclaredMethods()){
 
-                    for(Method m : methods) {
+        if(m.isAnnotationPresent(Url.class)){
 
-                        if(m.isAnnotationPresent(
-                                Url.class)) {
+            Url annotation = m.getAnnotation(Url.class);
 
-                            Url url =
-                                    m.getAnnotation(
-                                            Url.class);
+            Mapping map = new Mapping();
 
-                            mappings.put(
-                                    url.value(),
-                                    new Mapping(
-                                            c.getName(),
-                                            m.getName()
-                                    )
-                            );
-                        }
-                    }
-                }
+            map.setUrl(annotation.value());
+            map.setController(c.getSimpleName());
+            map.setMethod(m.getName());
+
+            mappings.put(annotation.value(), map);
+        }
+    }
+}
             }
 
         } catch(Exception e) {
@@ -76,120 +68,48 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    protected void processRequest(
-            HttpServletRequest request,
-            HttpServletResponse response)
-            throws ServletException, IOException {
+   protected void processRequest(HttpServletRequest request,
+                              HttpServletResponse response)
+        throws ServletException, IOException {
 
-        response.setContentType("text/html");
+    response.setContentType("text/plain");
 
-        PrintWriter out =
-                response.getWriter();
+    PrintWriter out = response.getWriter();
 
-        String context =
-                request.getContextPath();
+    String path = request.getRequestURI()
+            .substring(request.getContextPath().length());
 
-        String uri =
-                request.getRequestURI();
+    Mapping map = mappings.get(path);
 
-        String path =
-                uri.substring(context.length());
+    if(map != null){
 
-        out.println("<html>");
-        out.println("<head>");
-        out.println("<title>Front Controller</title>");
-        out.println("</head>");
-        out.println("<body>");
+        out.println("URL supportee");
+        out.println("--------------------");
+        out.println("URL        : " + map.getUrl());
+        out.println("Controller : " + map.getController());
+        out.println("Methode    : " + map.getMethod());
 
-        out.println("<h1>Manakory Jiaby</h1>");
+    }else{
 
-        out.println("<p>URL : "
-                + uri
-                + "</p>");
+        out.println("Je ne connais pas cette URL");
+        out.println();
 
-        // Sprint 1
+        out.println("Liste des URLs supportees");
 
-        out.println("<h2>Controllers :</h2>");
+        for(Mapping m : mappings.values()){
 
-        if(controllers.isEmpty()) {
-
-            out.println("<p>No controllers found.</p>");
-
-        } else {
-
-            out.println("<ul>");
-
-            for(String controller
-                    : controllers) {
-
-                out.println(
-                        "<li>"
-                                + controller
-                                + "</li>");
-            }
-
-            out.println("</ul>");
+            out.println(
+                    m.getUrl()
+                    +" --> "
+                    +m.getController()
+                    +" --> "
+                    +m.getMethod()
+            );
         }
 
-        // Sprint 2
-
-        out.println("<hr>");
-
-        out.println(
-                "<h2>Recherche URL</h2>");
-
-        Mapping mapping =
-                mappings.get(path);
-
-        if(mapping != null) {
-
-            out.println(
-                    "<h3>URL connue</h3>");
-
-            out.println(
-                    "<p>Classe : "
-                            + mapping.getClassName()
-                            + "</p>");
-
-            out.println(
-                    "<p>Methode : "
-                            + mapping.getMethodName()
-                            + "</p>");
-
-        } else {
-
-            out.println(
-                    "<h3>Je ne connais pas cette URL</h3>");
-
-            out.println(
-                    "<h4>URLs connues :</h4>");
-
-            out.println("<ul>");
-
-            for(String url :
-                    mappings.keySet()) {
-
-                Mapping m =
-                        mappings.get(url);
-
-                out.println(
-                        "<li>"
-                                + url
-                                + " -> "
-                                + m.getClassName()
-                                + "."
-                                + m.getMethodName()
-                                + "()"
-                                + "</li>");
-            }
-
-            out.println("</ul>");
-        }
-
-        out.println("</body>");
-        out.println("</html>");
     }
 
+}
     @Override
     protected void doGet(
             HttpServletRequest request,
