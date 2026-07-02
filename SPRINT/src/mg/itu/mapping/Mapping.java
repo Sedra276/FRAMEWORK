@@ -1,41 +1,48 @@
 package mg.itu.mapping;
 
+import java.lang.reflect.Method;
+
 public class Mapping {
 
-    private String url;
-    private String controller;
-    private String method;
+    private Class<?> controllerClass;
+
+    private Method method;
 
     public Mapping() {
     }
 
-    public Mapping(String url, String controller, String method) {
-        this.url = url;
-        this.controller = controller;
+    public Mapping(Class<?> controllerClass,
+                   Method method) {
+
+        this.controllerClass = controllerClass;
         this.method = method;
     }
 
-    public String getUrl() {
-        return url;
+    public Class<?> getControllerClass() {
+        return controllerClass;
     }
 
-    public void setUrl(String url) {
-        this.url = url;
+    public void setControllerClass(
+            Class<?> controllerClass) {
+
+        this.controllerClass = controllerClass;
     }
 
-    public String getController() {
-        return controller;
-    }
-
-    public void setController(String controller) {
-        this.controller = controller;
-    }
-
-    public String getMethod() {
+    public Method getMethod() {
         return method;
     }
 
-    public void setMethod(String method) {
+    public void setMethod(Method method) {
         this.method = method;
     }
+
+    @Override
+    public String toString() {
+
+        return controllerClass.getSimpleName()
+                + "."
+                + method.getName();
+
+    }
+
 }

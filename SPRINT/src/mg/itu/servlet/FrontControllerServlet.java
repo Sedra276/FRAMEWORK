@@ -1,134 +1,144 @@
 package mg.itu.servlet;
 
-import jakarta.servlet.*;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 
-import java.io.*;
-import java.lang.reflect.Method;
-import java.util.*;
-
-import mg.itu.annotation.Controller;
-import mg.itu.annotation.Url;
+import mg.itu.http.HttpMethode;
 import mg.itu.mapping.Mapping;
-import mg.itu.util.FindClassesByAnnotation;
+import mg.itu.mapping.UrlMethode;
 
-public class FrontControllerServlet extends HttpServlet {
+public class FrontControllerServlet
+        extends HttpServlet {
 
-    private List<String> controllers = new ArrayList<>();
-
-    private HashMap<String, Mapping> mappings =
-            new HashMap<>();
-
-    @Override
-    public void init() throws ServletException {
-
-        super.init();
-
-        String basePackage =
-                getInitParameter("base-package");
-
-        try {
-
-            if(basePackage != null &&
-                    !basePackage.trim().isEmpty()) {
-
-                List<Class<?>> classes =
-                        FindClassesByAnnotation.find(
-                                basePackage,
-                                Controller.class);
-
-              for(Class<?> c : classes){
-
-    controllers.add(c.getName());
-
-    for(Method m : c.getDeclaredMethods()){
-
-        if(m.isAnnotationPresent(Url.class)){
-
-            Url annotation = m.getAnnotation(Url.class);
-
-            Mapping map = new Mapping();
-
-            map.setUrl(annotation.value());
-            map.setController(c.getSimpleName());
-            map.setMethod(m.getName());
-
-            mappings.put(annotation.value(), map);
-        }
-    }
-}
-            }
-
-        } catch(Exception e) {
-
-            throw new ServletException(
-                    "Error while scanning package : "
-                            + basePackage,
-                    e);
-        }
-    }
-
-   protected void processRequest(HttpServletRequest request,
-                              HttpServletResponse response)
-        throws ServletException, IOException {
-
-    response.setContentType("text/plain");
-
-    PrintWriter out = response.getWriter();
-
-    String path = request.getRequestURI()
-            .substring(request.getContextPath().length());
-
-    Mapping map = mappings.get(path);
-
-    if(map != null){
-
-        out.println("URL supportee");
-        out.println("--------------------");
-        out.println("URL        : " + map.getUrl());
-        out.println("Controller : " + map.getController());
-        out.println("Methode    : " + map.getMethod());
-
-    }else{
-
-        out.println("Je ne connais pas cette URL");
-        out.println();
-
-        out.println("Liste des URLs supportees");
-
-        for(Mapping m : mappings.values()){
-
-            out.println(
-                    m.getUrl()
-                    +" --> "
-                    +m.getController()
-                    +" --> "
-                    +m.getMethod()
-            );
-        }
-
-    }
-
-}
     @Override
     protected void doGet(
-            HttpServletRequest request,
-            HttpServletResponse response)
+            HttpServletRequest req,
+            HttpServletResponse resp)
             throws ServletException, IOException {
 
-        processRequest(
-                request,
-                response);
+        processRequest(req, resp);
     }
 
     @Override
     protected void doPost(
+            HttpServletRequest req,
+            HttpServletResponse resp)
+            throws ServletException, IOException {
+
+        processRequest(req, resp);
+    }
+
+    protected void processRequest(
             HttpServletRequest request,
             HttpServletResponse response)
             throws ServletException, IOException {
 
-        processRequest(
-                request,
-                response);
+        response.setContentType("text/plain");
+
+        PrintWriter out =
+                response.getWriter();
+
+        ServletContext context =
+                getServletContext();
+
+        HashMap<UrlMethode, Mapping> mappings =
+                (HashMap<UrlMethode, Mapping>)
+                        context.getAttribute(
+                                "mapping");
+
+        if (mappings == null) {
+
+            out.println("Aucun mapping.");
+
+            return;
+
+        }
+
+        String path =
+                request.getRequestURI()
+                        .substring(
+                                request.getContextPath()
+                                        .length());
+
+        HttpMethode httpMethod =
+                HttpMethode.valueOf(
+                        request.getMethod());
+
+        UrlMethode key =
+                new UrlMethode(
+                        path,
+                        httpMethod);
+
+        Mapping mapping =
+                mappings.get(key);
+                out.println("========== DEBUG ==========");
+out.println("Méthode HTTP : " + request.getMethod());
+out.println("Path : " + path);
+out.println("Clé recherchée : " + key);
+out.println();
+
+out.println("Toutes les clés :");
+for (UrlMethode u : mappings.keySet()) {
+    out.println(u);
+}
+out.println("===========================");
+
+        if (mapping == null) {
+
+            out.println("URL inconnue\n");
+
+            out.println("URLs disponibles :\n");
+
+            for (UrlMethode url :
+                    mappings.keySet()) {
+
+                Mapping m =
+                        mappings.get(url);
+
+                out.println(
+                        url.getMethode()
+                                + " "
+                                + url.getUrl()
+                                + " -> "
+                                + m);
+
+            }
+
+            return;
+
+        }
+
+        try {
+
+            Object controller =
+                    mapping.getControllerClass()
+                            .getDeclaredConstructor()
+                            .newInstance();
+
+            Method method =
+                    mapping.getMethod();
+
+            Object result =
+                    method.invoke(controller);
+
+            if (result != null) {
+
+                out.println(result);
+
+            }
+
+        } catch (Exception e) {
+
+            throw new ServletException(e);
+
+        }
+
     }
+
 }
