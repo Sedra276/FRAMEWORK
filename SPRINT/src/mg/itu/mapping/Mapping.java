@@ -1,18 +1,21 @@
 package mg.itu.mapping;
 
-public class Mapping {
+import mg.itu.http.HttpMethode;
 
+public class Mapping {
     private String url;
     private String controller;
     private String method;
+    private HttpMethode httpMethode;
 
     public Mapping() {
     }
 
-    public Mapping(String url, String controller, String method) {
+    public Mapping(String url, String controller, String method, HttpMethode httpMethode) {
         this.url = url;
         this.controller = controller;
         this.method = method;
+        this.httpMethode = httpMethode;
     }
 
     public String getUrl() {
@@ -37,5 +40,13 @@ public class Mapping {
 
     public void setMethod(String method) {
         this.method = method;
+    }
+
+    public HttpMethode getHttpMethode() {
+        return httpMethode;
+    }
+
+    public void setHttpMethode(HttpMethode httpMethode) {
+        this.httpMethode = httpMethode;
     }
 }
