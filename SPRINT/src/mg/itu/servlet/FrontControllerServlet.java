@@ -57,8 +57,7 @@ public class FrontControllerServlet extends HttpServlet {
                 }
             }
         } catch (Throwable e) {
-            // On capture TOUT (Exception + Error) pour eviter que Tomcat
-            // ne mette le servlet en "unavailable" a cause d'une erreur de scan.
+           
             getServletContext().log("[FrontController] ERREUR CRITIQUE au demarrage : " + e, e);
             e.printStackTrace();
         }
@@ -77,7 +76,7 @@ public class FrontControllerServlet extends HttpServlet {
 
         response.setContentType("text/plain; charset=UTF-8");
 
-        // 1) URL en conflit -> message d'erreur clair dans le navigateur + log catalina
+       
         if (duplicateErrors.containsKey(key)) {
             String msg = duplicateErrors.get(key);
             getServletContext().log("[FrontController] Requete bloquee : " + msg);
