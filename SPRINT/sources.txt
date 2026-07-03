@@ -1,5 +1,7 @@
 src/mg/itu/annotation/Controller.java
-src/mg/itu/annotation/Url.java
+src/mg/itu/annotation/UrlMapping.java
+src/mg/itu/http/HttpMethode.java
 src/mg/itu/mapping/Mapping.java
+src/mg/itu/exception/DuplicateMappingException.java
 src/mg/itu/servlet/FrontControllerServlet.java
 src/mg/itu/util/FindClassesByAnnotation.java

@@ -7,7 +7,6 @@ import java.lang.reflect.Method;
 import java.util.*;
 import mg.itu.annotation.Controller;
 import mg.itu.annotation.UrlMapping;
-import mg.itu.exception.DuplicateMappingException;
 import mg.itu.http.HttpMethode;
 import mg.itu.mapping.Mapping;
 import mg.itu.util.FindClassesByAnnotation;
@@ -16,11 +15,13 @@ public class FrontControllerServlet extends HttpServlet {
 
     private List<String> controllers = new ArrayList<>();
     private HashMap<String, Mapping> mappings = new HashMap<>();
+    private HashMap<String, String> duplicateErrors = new HashMap<>();
 
     @Override
     public void init() throws ServletException {
         super.init();
         String basePackage = getInitParameter("base-package");
+
         try {
             if (basePackage != null && !basePackage.trim().isEmpty()) {
                 List<Class<?>> classes = FindClassesByAnnotation.find(basePackage, Controller.class);
@@ -31,17 +32,18 @@ public class FrontControllerServlet extends HttpServlet {
                     for (Method m : c.getDeclaredMethods()) {
                         if (m.isAnnotationPresent(UrlMapping.class)) {
                             UrlMapping annotation = m.getAnnotation(UrlMapping.class);
-
                             String key = buildKey(annotation.url(), annotation.method());
 
-                            if (mappings.containsKey(key)) {
-                                Mapping existing = mappings.get(key);
-                                throw new DuplicateMappingException(
-                                    "URL dupliquee : \"" + annotation.url() + "\" avec la methode "
-                                    + annotation.method() + " est deja mappee sur "
-                                    + existing.getController() + "." + existing.getMethod()
-                                    + " (conflit avec " + c.getSimpleName() + "." + m.getName() + ")"
-                                );
+                            if (mappings.containsKey(key) || duplicateErrors.containsKey(key)) {
+                                String msg = "URL dupliquee : \"" + annotation.url()
+                                        + "\" avec la methode " + annotation.method()
+                                        + " est mappee plusieurs fois (conflit detecte sur "
+                                        + c.getSimpleName() + "." + m.getName() + ")";
+
+                                duplicateErrors.put(key, msg);
+                                mappings.remove(key);
+                                getServletContext().log("[FrontController] " + msg);
+                                continue;
                             }
 
                             Mapping map = new Mapping();
@@ -54,11 +56,11 @@ public class FrontControllerServlet extends HttpServlet {
                     }
                 }
             }
-        } catch (DuplicateMappingException e) {
-            // On relance directement pour garder un message clair au demarrage
-            throw new ServletException(e.getMessage(), e);
-        } catch (Exception e) {
-            throw new ServletException("Error while scanning package : " + basePackage, e);
+        } catch (Throwable e) {
+            // On capture TOUT (Exception + Error) pour eviter que Tomcat
+            // ne mette le servlet en "unavailable" a cause d'une erreur de scan.
+            getServletContext().log("[FrontController] ERREUR CRITIQUE au demarrage : " + e, e);
+            e.printStackTrace();
         }
     }
 
@@ -68,14 +70,28 @@ public class FrontControllerServlet extends HttpServlet {
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        response.setContentType("text/plain");
-        PrintWriter out = response.getWriter();
 
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        String httpMethod = request.getMethod(); // "GET" ou "POST"
-
+        String httpMethod = request.getMethod();
         String key = path + "_" + httpMethod;
+
+        response.setContentType("text/plain; charset=UTF-8");
+
+        // 1) URL en conflit -> message d'erreur clair dans le navigateur + log catalina
+        if (duplicateErrors.containsKey(key)) {
+            String msg = duplicateErrors.get(key);
+            getServletContext().log("[FrontController] Requete bloquee : " + msg);
+
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            PrintWriter out = response.getWriter();
+            out.println("ERREUR - URL DUPLIQUEE");
+            out.println("--------------------------------");
+            out.println(msg);
+            return;
+        }
+
         Mapping map = mappings.get(key);
+        PrintWriter out = response.getWriter();
 
         if (map != null) {
             out.println("URL supportee");
