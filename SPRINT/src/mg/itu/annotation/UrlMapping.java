@@ -5,10 +5,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.annotation.ElementType;
 
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-public @interface Controller {
+import mg.itu.http.HttpMethode;
 
-    String value() default "";
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+public @interface UrlMapping {
+
+    String url();
+
+    HttpMethode method() default HttpMethode.GET;
 
 }

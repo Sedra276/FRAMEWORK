@@ -1,64 +1,91 @@
 package mg.itu.util;
 
 import java.io.File;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
 public class FindClassesByAnnotation {
 
-    public static List<Class<?>> find(
-            String packageName,
-            Class<?> annotation)
-            throws Exception {
+    /**
+     * Retourne toutes les classes d'un package
+     */
+    public static List<Class<?>> findClasses(String packageName)
+            throws ClassNotFoundException, URISyntaxException {
 
-        List<Class<?>> result =
-                new ArrayList<>();
+        List<Class<?>> classes = new ArrayList<>();
 
-        String root =
-                Thread.currentThread()
-                        .getContextClassLoader()
-                        .getResource("")
-                        .getPath();
+        String path = packageName.replace('.', '/');
 
-        String packagePath =
-                packageName.replace('.', '/');
+        ClassLoader classLoader =
+                Thread.currentThread().getContextClassLoader();
 
-        File folder =
-                new File(root + packagePath);
+        URL resource =
+                classLoader.getResource(path);
 
-        if (!folder.exists()) {
-            return result;
+        if(resource == null){
+            return classes;
         }
 
-        File[] files = folder.listFiles();
+        File directory =
+                new File(resource.toURI());
 
-        if (files == null) {
-            return result;
-        }
+        scanDirectory(
+                packageName,
+                directory,
+                classes,
+                classLoader);
 
-        for (File file : files) {
-
-            if (!file.getName()
-                    .endsWith(".class")) {
-                continue;
-            }
-
-            String className =
-                    packageName
-                    + "."
-                    + file.getName()
-                        .replace(".class", "");
-
-            Class<?> clazz =
-                    Class.forName(className);
-
-            if (clazz.isAnnotationPresent(
-                    (Class) annotation)) {
-
-                result.add(clazz);
-            }
-        }
-
-        return result;
+        return classes;
     }
+
+    /**
+     * Scan récursif des sous-packages
+     */
+    private static void scanDirectory(
+            String packageName,
+            File directory,
+            List<Class<?>> classes,
+            ClassLoader classLoader)
+            throws ClassNotFoundException {
+
+        if(directory == null || !directory.exists()){
+            return;
+        }
+
+        File[] files = directory.listFiles();
+
+        if(files == null){
+            return;
+        }
+
+        for(File file : files){
+
+            if(file.isDirectory()){
+
+                scanDirectory(
+                        packageName + "." + file.getName(),
+                        file,
+                        classes,
+                        classLoader);
+
+            }
+
+            else if(file.getName().endsWith(".class")){
+
+                String className =
+                        packageName
+                        + "."
+                        + file.getName()
+                              .replace(".class","");
+
+                Class<?> clazz =
+                        classLoader.loadClass(className);
+
+                classes.add(clazz);
+            }
+        }
+    }
+
 }
