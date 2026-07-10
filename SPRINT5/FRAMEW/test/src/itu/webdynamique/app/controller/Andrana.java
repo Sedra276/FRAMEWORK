@@ -1,5 +1,4 @@
 package itu.webdynamique.app.controller;
-
 import itu.webdynamique.framework.ModelAndView;
 import itu.webdynamique.framework.annotation.Controller;
 import itu.webdynamique.framework.annotation.UrlMapping;
@@ -8,17 +7,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Controller
-public class EmpController {
-
-    @UrlMapping("/employe/liste")
-    public ModelAndView afficherListe() {
+public class Andrana {
+     @UrlMapping("/teste/liste")
+      public ModelAndView Liste() {
 
         
         List<String> employes = new ArrayList<>();
-        employes.add("Mino");
-        employes.add("Nanou");
-        employes.add("Alime");
-        employes.add("koto");
+        employes.add("XXXXX");
+        employes.add("YYYYY");
+        employes.add("ZZZZZZZZZZZZ");
+        
 
         
         ModelAndView mv = new ModelAndView();
