@@ -7,3 +7,4 @@ src/mg/itu/servlet/FrontControllerServlet.java
 src/mg/itu/servlet/FrontControllerListener.java
 src/mg/itu/util/ScanAnnotation.java
 src/mg/itu/util/FindClassesByAnnotation.java
+src/mg/itu/view/ModelAndView.java
