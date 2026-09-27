@@ -1,17 +1,14 @@
-    #!/bin/bash
+#!/bin/bash
 
-# Nom du framework
 FRAMEWORK_NAME="framework"
 
-# Répertoires
 SRC_DIR="src"
 BUILD_DIR="build"
 
-# Tomcat
-LIB_DIR="/home/sedra/Documents/dossierS1/tomcat/tomcat-10.0.16/lib"
+LIB_DIR="/opt/tomcat/lib"
 
-# Avec Tomcat 10+
 SERVLET_API_JAR="$LIB_DIR/servlet-api.jar"
+GSON_JAR="lib/gson.jar"
 
 echo "Nettoyage..."
 rm -rf $BUILD_DIR
@@ -22,7 +19,7 @@ echo "Compilation..."
 find $SRC_DIR -name "*.java" > sources.txt
 
 javac \
--cp "$SERVLET_API_JAR" \
+-cp "$SERVLET_API_JAR:$GSON_JAR" \
 -d "$BUILD_DIR/classes" \
 @sources.txt
 

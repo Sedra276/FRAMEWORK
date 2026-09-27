@@ -7,11 +7,14 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.gson.Gson;
+
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 
+import mg.itu.annotation.RestAPI;
 import mg.itu.http.HttpMethode;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
@@ -117,14 +120,8 @@ public class FrontControllerServlet
         Method method =
                 mapping.getMethod();
 
-        if (method.getReturnType() != ModelAndView.class) {
-
-            throw new ServletException(
-                    "La methode "
-                            + method.getName()
-                            + " doit retourner un ModelAndView");
-
-        }
+        boolean isRestAPI =
+                method.isAnnotationPresent(RestAPI.class);
 
         try {
 
@@ -133,38 +130,73 @@ public class FrontControllerServlet
                             .getDeclaredConstructor()
                             .newInstance();
 
-            ModelAndView result =
-                    (ModelAndView) method.invoke(controller);
+            Object result =
+                    method.invoke(controller);
 
-            if (result == null) {
+            // Cas 1 : @RestAPI -> JSON, quel que soit le type retourne
+            if (isRestAPI) {
 
-                throw new ServletException(
-                        "Le ModelAndView renvoye par "
-                                + method.getName()
-                                + " est null");
+                response.setContentType(
+                        "application/json;charset=UTF-8");
+
+                Gson gson =
+                        new Gson();
+
+                String json =
+                        gson.toJson(result);
+
+                PrintWriter out =
+                        response.getWriter();
+
+                out.print(json);
+                out.flush();
+
+                return;
 
             }
 
-            addAttributesToRequest(
-                    request,
-                    result.getData());
+            // Cas 2 : ModelAndView -> forward vers la JSP
+            if (result instanceof ModelAndView) {
 
-            String prefix =
-                    context.getInitParameter("view-prefix");
+                ModelAndView mv =
+                        (ModelAndView) result;
 
-            String suffix =
-                    context.getInitParameter("view-suffix");
+                addAttributesToRequest(
+                        request,
+                        mv.getData());
 
-            String viewPath =
-                    buildViewPath(
-                            prefix,
-                            result.getView(),
-                            suffix);
+                String prefix =
+                        context.getInitParameter("view-prefix");
 
-            RequestDispatcher dispatcher =
-                    request.getRequestDispatcher(viewPath);
+                String suffix =
+                        context.getInitParameter("view-suffix");
 
-            dispatcher.forward(request, response);
+                String viewPath =
+                        buildViewPath(
+                                prefix,
+                                mv.getView(),
+                                suffix);
+
+                RequestDispatcher dispatcher =
+                        request.getRequestDispatcher(viewPath);
+
+                dispatcher.forward(request, response);
+
+                return;
+
+            }
+
+            // Cas 3 : compatibilite avec les anciens controleurs (String, void, etc.)
+            response.setContentType(
+                    "text/plain;charset=UTF-8");
+
+            PrintWriter out =
+                    response.getWriter();
+
+            out.print(
+                    result == null ? "" : result.toString());
+
+            out.flush();
 
         } catch (InstantiationException
                 | IllegalAccessException
