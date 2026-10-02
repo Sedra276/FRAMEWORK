@@ -4,21 +4,21 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.google.gson.Gson;
 
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 
-import mg.itu.annotation.RestAPI;
 import mg.itu.http.HttpMethode;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
 import mg.itu.view.ModelAndView;
+import com.google.gson.Gson;
+import mg.itu.annotation.RestAPI;
 
 public class FrontControllerServlet
         extends HttpServlet {
@@ -46,6 +46,12 @@ public class FrontControllerServlet
             HttpServletResponse response)
             throws ServletException, IOException {
 
+        String path =
+                request.getRequestURI()
+                        .substring(
+                                request.getContextPath()
+                                        .length());
+
         ServletContext context =
                 getServletContext();
 
@@ -68,12 +74,6 @@ public class FrontControllerServlet
             return;
 
         }
-
-        String path =
-                request.getRequestURI()
-                        .substring(
-                                request.getContextPath()
-                                        .length());
 
         HttpMethode httpMethod =
                 HttpMethode.valueOf(
@@ -130,8 +130,15 @@ public class FrontControllerServlet
                             .getDeclaredConstructor()
                             .newInstance();
 
+            // Sprint 7 : on construit les arguments a partir des
+            // parametres de la requete (formulaire ou query string)
+            Object[] arguments =
+                    buildArguments(
+                            request,
+                            method);
+
             Object result =
-                    method.invoke(controller);
+                    method.invoke(controller, arguments);
 
             // Cas 1 : @RestAPI -> JSON, quel que soit le type retourne
             if (isRestAPI) {
@@ -208,6 +215,85 @@ public class FrontControllerServlet
                     "Erreur (LcsFw) : " + e.getMessage(), e);
 
         }
+
+    }
+
+    /**
+     * Sprint 7 - Binding : associe chaque parametre de la methode
+     * du controleur a la valeur du request.getParameter() portant
+     * le meme nom. Necessite la compilation avec javac -parameters
+     * (voir jar.sh) pour que getParameters() renvoie les vrais noms
+     * (nom, age...) au lieu de arg0, arg1...
+     */
+    private Object[] buildArguments(
+            HttpServletRequest request,
+            Method method) {
+
+        Parameter[] parametres =
+                method.getParameters();
+
+        Object[] arguments =
+                new Object[parametres.length];
+
+        for (int i = 0; i < parametres.length; i++) {
+
+            String nom =
+                    parametres[i].getName();
+
+            String valeur =
+                    request.getParameter(nom);
+
+            arguments[i] =
+                    convertValue(
+                            valeur,
+                            parametres[i].getType());
+
+        }
+
+        return arguments;
+
+    }
+
+    /**
+     * Sprint 7 - Conversion du String recu du formulaire vers le
+     * type reellement declare dans la methode du controleur.
+     */
+    private Object convertValue(
+            String valeur,
+            Class<?> type) {
+
+        if (type == String.class) {
+            return valeur;
+        }
+
+        if (valeur == null || valeur.isEmpty()) {
+
+            if (type == int.class) return 0;
+            if (type == long.class) return 0L;
+            if (type == double.class) return 0.0;
+            if (type == boolean.class) return false;
+
+            return null;
+
+        }
+
+        if (type == int.class || type == Integer.class) {
+            return Integer.parseInt(valeur);
+        }
+
+        if (type == long.class || type == Long.class) {
+            return Long.parseLong(valeur);
+        }
+
+        if (type == double.class || type == Double.class) {
+            return Double.parseDouble(valeur);
+        }
+
+        if (type == boolean.class || type == Boolean.class) {
+            return Boolean.parseBoolean(valeur);
+        }
+
+        return valeur;
 
     }
 
