@@ -19,6 +19,7 @@ echo "Compilation..."
 find $SRC_DIR -name "*.java" > sources.txt
 
 javac \
+-parameters \
 -cp "$SERVLET_API_JAR:$GSON_JAR" \
 -d "$BUILD_DIR/classes" \
 @sources.txt
