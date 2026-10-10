@@ -16,6 +16,7 @@ import jakarta.servlet.http.*;
 import mg.itu.http.HttpMethode;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
+import mg.itu.util.ObjectBinder;
 import mg.itu.view.ModelAndView;
 import com.google.gson.Gson;
 import mg.itu.annotation.RestAPI;
@@ -219,11 +220,12 @@ public class FrontControllerServlet
     }
 
     /**
-     * Sprint 7 - Binding : associe chaque parametre de la methode
-     * du controleur a la valeur du request.getParameter() portant
-     * le meme nom. Necessite la compilation avec javac -parameters
-     * (voir jar.sh) pour que getParameters() renvoie les vrais noms
-     * (nom, age...) au lieu de arg0, arg1...
+     * Sprint 8 - Binding : chaque parametre de la methode du controleur
+     * est rempli soit directement (String, int...) soit par un objet
+     * construit a partir des champs "nomParametre.champ" du formulaire,
+     * soit par une liste (nomParametre[0].champ). getParameterizedType()
+     * donne le type des elements d'une List<T>.
+     * Le detail est delegue a ObjectBinder.
      */
     private Object[] buildArguments(
             HttpServletRequest request,
@@ -235,65 +237,21 @@ public class FrontControllerServlet
         Object[] arguments =
                 new Object[parametres.length];
 
+        Map<String, String[]> params =
+                request.getParameterMap();
+
         for (int i = 0; i < parametres.length; i++) {
 
-            String nom =
-                    parametres[i].getName();
-
-            String valeur =
-                    request.getParameter(nom);
-
             arguments[i] =
-                    convertValue(
-                            valeur,
-                            parametres[i].getType());
+                    ObjectBinder.bind(
+                            params,
+                            parametres[i].getName(),
+                            parametres[i].getType(),
+                            parametres[i].getParameterizedType());
 
         }
 
         return arguments;
-
-    }
-
-    /**
-     * Sprint 7 - Conversion du String recu du formulaire vers le
-     * type reellement declare dans la methode du controleur.
-     */
-    private Object convertValue(
-            String valeur,
-            Class<?> type) {
-
-        if (type == String.class) {
-            return valeur;
-        }
-
-        if (valeur == null || valeur.isEmpty()) {
-
-            if (type == int.class) return 0;
-            if (type == long.class) return 0L;
-            if (type == double.class) return 0.0;
-            if (type == boolean.class) return false;
-
-            return null;
-
-        }
-
-        if (type == int.class || type == Integer.class) {
-            return Integer.parseInt(valeur);
-        }
-
-        if (type == long.class || type == Long.class) {
-            return Long.parseLong(valeur);
-        }
-
-        if (type == double.class || type == Double.class) {
-            return Double.parseDouble(valeur);
-        }
-
-        if (type == boolean.class || type == Boolean.class) {
-            return Boolean.parseBoolean(valeur);
-        }
-
-        return valeur;
 
     }
 
