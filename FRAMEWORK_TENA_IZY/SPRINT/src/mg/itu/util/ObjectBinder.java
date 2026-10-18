@@ -9,26 +9,48 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 
+import mg.itu.http.MapFile;
+
 /**
- * Sprint 8 - Binding d'objet (avec listes).
+ * Sprint 8 - Binding de la requete vers les parametres d'une action.
  *
  * Conventions de nommage des champs du formulaire :
  *   objet            : emp.nom, emp.adresse.ville
  *   liste d'objets   : emp.adresses[0].ville, emp.adresses[1].ville
- *   liste de simples : emp.tags=a&emp.tags=b   ou   emp.notes[0]=15&emp.notes[1]=17
+ *   liste de simples : emp.tags=a&emp.tags=b   ou   emp.notes[0]=15
+ *   fichier          : emp.rectoCin  (input type="file" name="emp.rectoCin")
+ *   liste de fichiers: emp.docs (input multiple) ou emp.docs[0], emp.docs[1]
  *
- * Cette classe ne depend pas de la servlet : elle travaille sur la Map
- * retournee par request.getParameterMap(), donc elle est testable sans Tomcat.
+ * Un champ ou parametre de type MapFile est rempli depuis la Map des
+ * fichiers recus ; il n'est jamais traite comme un objet ordinaire.
+ *
+ * Cette classe ne depend pas de la servlet : elle travaille sur des Map
+ * (request.getParameterMap() et les fichiers deja extraits), donc elle
+ * est testable sans Tomcat.
  */
 public class ObjectBinder {
 
     private ObjectBinder() {
+    }
+
+    /** Donnees de la requete, passees d'un appel recursif a l'autre. */
+    private static final class Ctx {
+
+        final Map<String, String[]> params;
+        final Map<String, List<MapFile>> files;
+
+        Ctx(Map<String, String[]> params, Map<String, List<MapFile>> files) {
+            this.params = params;
+            this.files = files == null
+                    ? Collections.<String, List<MapFile>>emptyMap()
+                    : files;
+        }
     }
 
     public static Object bind(
@@ -36,7 +58,16 @@ public class ObjectBinder {
             String nom,
             Class<?> type) {
 
-        return bind(params, nom, type, type);
+        return bind(params, null, nom, type, type);
+    }
+
+    public static Object bind(
+            Map<String, String[]> params,
+            String nom,
+            Class<?> type,
+            Type genericType) {
+
+        return bind(params, null, nom, type, genericType);
     }
 
     /**
@@ -45,15 +76,14 @@ public class ObjectBinder {
      */
     public static Object bind(
             Map<String, String[]> params,
+            Map<String, List<MapFile>> files,
             String nom,
             Class<?> type,
             Type genericType) {
 
         // premier niveau : un objet est toujours instancie, une liste
         // est toujours renvoyee (vide si rien recu)
-        Object valeur = resolve(params, nom, type, genericType, true);
-
-        return valeur;
+        return resolve(new Ctx(params, files), nom, type, genericType, true);
     }
 
     /**
@@ -63,23 +93,29 @@ public class ObjectBinder {
      *                 pour cette cle (le champ garde alors sa valeur par defaut)
      */
     private static Object resolve(
-            Map<String, String[]> params,
+            Ctx ctx,
             String cle,
             Class<?> type,
             Type genericType,
             boolean force) {
 
-        // 1. valeur simple
+        // 1. fichier : verifie AVANT les objets, sinon MapFile serait
+        //    instancie comme un POJO avec ses champs filename/extension
+        if (type == MapFile.class) {
+            return firstFile(ctx, cle);
+        }
+
+        // 2. valeur simple
         if (isSimple(type)) {
 
-            if (!force && !params.containsKey(cle)) {
+            if (!force && !ctx.params.containsKey(cle)) {
                 return null;
             }
 
-            return convertValue(first(params, cle), type);
+            return convertValue(first(ctx.params, cle), type);
         }
 
-        // 2. collection : List, Set, Collection
+        // 3. collection : List, Set, Collection
         if (Collection.class.isAssignableFrom(type)) {
 
             Class<?> elementType = elementTypeOf(genericType);
@@ -88,8 +124,7 @@ public class ObjectBinder {
                 return null; // List sans type generique : non gere
             }
 
-            List<Object> elements =
-                    buildElements(params, cle, elementType);
+            List<Object> elements = buildElements(ctx, cle, elementType);
 
             if (elements == null) {
                 return force ? newCollection(type, new ArrayList<>()) : null;
@@ -98,20 +133,18 @@ public class ObjectBinder {
             return newCollection(type, elements);
         }
 
-        // 3. tableau : String[], int[], Adresse[]
+        // 4. tableau : String[], int[], Adresse[], MapFile[]
         if (type.isArray()) {
 
             Class<?> elementType = type.getComponentType();
 
-            List<Object> elements =
-                    buildElements(params, cle, elementType);
+            List<Object> elements = buildElements(ctx, cle, elementType);
 
             if (elements == null) {
                 return force ? Array.newInstance(elementType, 0) : null;
             }
 
-            Object tableau =
-                    Array.newInstance(elementType, elements.size());
+            Object tableau = Array.newInstance(elementType, elements.size());
 
             for (int i = 0; i < elements.size(); i++) {
                 Array.set(tableau, i, elements.get(i));
@@ -120,13 +153,13 @@ public class ObjectBinder {
             return tableau;
         }
 
-        // 4. interface / abstract (Map, etc.) : non gere
+        // 5. interface / abstract (Map, etc.) : non gere
         if (type.isInterface() || Modifier.isAbstract(type.getModifiers())) {
             return null;
         }
 
-        // 5. objet
-        return bindObject(params, cle, type, force);
+        // 6. objet
+        return bindObject(ctx, cle, type, force);
     }
 
     /**
@@ -134,24 +167,32 @@ public class ObjectBinder {
      * Renvoie null si le formulaire ne contient rien pour cette cle.
      */
     private static List<Object> buildElements(
-            Map<String, String[]> params,
+            Ctx ctx,
             String cle,
             Class<?> elementType) {
 
         List<Object> elements = new ArrayList<>();
 
         // cas A : valeurs simples repetees (emp.tags=a&emp.tags=b)
-        if (isSimple(elementType) && params.containsKey(cle)) {
+        if (isSimple(elementType) && ctx.params.containsKey(cle)) {
 
-            for (String valeur : params.get(cle)) {
+            for (String valeur : ctx.params.get(cle)) {
                 elements.add(convertValue(valeur, elementType));
             }
 
             return elements;
         }
 
+        // cas A bis : plusieurs fichiers sous le meme nom (input multiple)
+        if (elementType == MapFile.class && ctx.files.containsKey(cle)) {
+
+            elements.addAll(ctx.files.get(cle));
+
+            return elements;
+        }
+
         // cas B : elements indexes (cle[0], cle[1].champ ...)
-        TreeSet<Integer> indices = findIndices(params, cle);
+        TreeSet<Integer> indices = findIndices(ctx, cle);
 
         if (indices.isEmpty()) {
             return null;
@@ -161,28 +202,39 @@ public class ObjectBinder {
         for (int i : indices) {
 
             Object element = resolve(
-                    params,
+                    ctx,
                     cle + "[" + i + "]",
                     elementType,
                     elementType,
                     true);
 
-            elements.add(element);
+            if (element != null) {
+                elements.add(element);
+            }
         }
 
         return elements;
     }
 
     /** Cherche tous les indices i pour lesquels une cle commence par "cle[i]". */
-    private static TreeSet<Integer> findIndices(
-            Map<String, String[]> params,
-            String cle) {
+    private static TreeSet<Integer> findIndices(Ctx ctx, String cle) {
 
         TreeSet<Integer> indices = new TreeSet<>();
 
+        collectIndices(ctx.params.keySet(), cle, indices);
+        collectIndices(ctx.files.keySet(), cle, indices);
+
+        return indices;
+    }
+
+    private static void collectIndices(
+            Iterable<String> cles,
+            String cle,
+            TreeSet<Integer> indices) {
+
         String debut = cle + "[";
 
-        for (String k : params.keySet()) {
+        for (String k : cles) {
 
             if (!k.startsWith(debut)) {
                 continue;
@@ -202,8 +254,6 @@ public class ObjectBinder {
                 // indice non numerique : ignore
             }
         }
-
-        return indices;
     }
 
     /** Extrait T de List<T> ; null si le type n'est pas parametre. */
@@ -249,14 +299,14 @@ public class ObjectBinder {
     }
 
     private static Object bindObject(
-            Map<String, String[]> params,
+            Ctx ctx,
             String prefix,
             Class<?> type,
             boolean force) {
 
         // objet imbrique : on ne l'instancie que si le formulaire
-        // contient au moins un champ qui le concerne
-        if (!force && !hasPrefix(params, prefix)) {
+        // contient au moins un champ ou fichier qui le concerne
+        if (!force && !hasPrefix(ctx, prefix)) {
             return null;
         }
 
@@ -272,10 +322,12 @@ public class ObjectBinder {
                             + " (constructeur sans argument requis)", e);
         }
 
+        // parcours des champs de l'objet : pour chacun, resolve() decide
+        // s'il s'agit d'un MapFile, d'une valeur simple, d'une liste...
         for (Field champ : allFields(type)) {
 
             Object valeur = resolve(
-                    params,
+                    ctx,
                     prefix + "." + champ.getName(),
                     champ.getType(),
                     champ.getGenericType(),
@@ -347,20 +399,35 @@ public class ObjectBinder {
         return champs;
     }
 
-    private static boolean hasPrefix(
-            Map<String, String[]> params,
-            String prefix) {
+    private static boolean hasPrefix(Ctx ctx, String prefix) {
 
         String debutPoint = prefix + ".";
         String debutIndex = prefix + "[";
 
-        for (String cle : params.keySet()) {
+        for (String cle : ctx.params.keySet()) {
+            if (cle.startsWith(debutPoint) || cle.startsWith(debutIndex)) {
+                return true;
+            }
+        }
+
+        for (String cle : ctx.files.keySet()) {
             if (cle.startsWith(debutPoint) || cle.startsWith(debutIndex)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static MapFile firstFile(Ctx ctx, String cle) {
+
+        List<MapFile> liste = ctx.files.get(cle);
+
+        if (liste == null || liste.isEmpty()) {
+            return null;
+        }
+
+        return liste.get(0);
     }
 
     private static String first(Map<String, String[]> params, String cle) {
