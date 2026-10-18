@@ -5,15 +5,21 @@ import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
 
 import mg.itu.http.HttpMethode;
+import mg.itu.http.MapFile;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
 import mg.itu.util.ObjectBinder;
@@ -21,6 +27,13 @@ import mg.itu.view.ModelAndView;
 import com.google.gson.Gson;
 import mg.itu.annotation.RestAPI;
 
+// Sprint 8 : sans cette annotation, le conteneur ne decode pas les
+// requetes multipart/form-data (upload) et getParts() est inutilisable.
+// Limites modifiables dans web.xml avec <multipart-config>.
+@MultipartConfig(
+        fileSizeThreshold = 1024 * 1024,
+        maxFileSize = 10L * 1024 * 1024,
+        maxRequestSize = 50L * 1024 * 1024)
 public class FrontControllerServlet
         extends HttpServlet {
 
@@ -131,8 +144,8 @@ public class FrontControllerServlet
                             .getDeclaredConstructor()
                             .newInstance();
 
-            // Sprint 7 : on construit les arguments a partir des
-            // parametres de la requete (formulaire ou query string)
+            // Sprint 7/8 : on construit les arguments a partir des
+            // parametres de la requete (formulaire, query string, fichiers)
             Object[] arguments =
                     buildArguments(
                             request,
@@ -221,15 +234,17 @@ public class FrontControllerServlet
 
     /**
      * Sprint 8 - Binding : chaque parametre de la methode du controleur
-     * est rempli soit directement (String, int...) soit par un objet
-     * construit a partir des champs "nomParametre.champ" du formulaire,
-     * soit par une liste (nomParametre[0].champ). getParameterizedType()
-     * donne le type des elements d'une List<T>.
-     * Le detail est delegue a ObjectBinder.
+     * est rempli soit directement (String, int, MapFile...), soit par un
+     * objet construit a partir des champs "nomParametre.champ" du
+     * formulaire, soit par une liste (nomParametre[0].champ).
+     * getParameterizedType() donne le type des elements d'une List<T>.
+     * Necessite javac -parameters (voir jar.sh) pour avoir les vrais
+     * noms de parametres.
      */
     private Object[] buildArguments(
             HttpServletRequest request,
-            Method method) {
+            Method method)
+            throws IOException, ServletException {
 
         Parameter[] parametres =
                 method.getParameters();
@@ -240,11 +255,15 @@ public class FrontControllerServlet
         Map<String, String[]> params =
                 request.getParameterMap();
 
+        Map<String, List<MapFile>> files =
+                extractFiles(request);
+
         for (int i = 0; i < parametres.length; i++) {
 
             arguments[i] =
                     ObjectBinder.bind(
                             params,
+                            files,
                             parametres[i].getName(),
                             parametres[i].getType(),
                             parametres[i].getParameterizedType());
@@ -252,6 +271,80 @@ public class FrontControllerServlet
         }
 
         return arguments;
+
+    }
+
+    /**
+     * Sprint 8 - Upload : transforme les parties "fichier" d'une requete
+     * multipart en MapFile, rangees par nom de champ. Les champs texte
+     * restent dans request.getParameterMap().
+     */
+    private Map<String, List<MapFile>> extractFiles(
+            HttpServletRequest request)
+            throws IOException, ServletException {
+
+        Map<String, List<MapFile>> files =
+                new HashMap<>();
+
+        String contentType =
+                request.getContentType();
+
+        if (contentType == null
+                || !contentType.toLowerCase().startsWith("multipart/")) {
+            return files;
+        }
+
+        for (Part part : request.getParts()) {
+
+            String nomFichier =
+                    part.getSubmittedFileName();
+
+            // null : champ texte ; vide : input file sans fichier choisi
+            if (nomFichier == null || nomFichier.isEmpty()) {
+                continue;
+            }
+
+            MapFile fichier =
+                    new MapFile(
+                            nomFichier,
+                            readBytes(part));
+
+            List<MapFile> liste =
+                    files.get(part.getName());
+
+            if (liste == null) {
+                liste = new ArrayList<>();
+                files.put(part.getName(), liste);
+            }
+
+            liste.add(fichier);
+
+        }
+
+        return files;
+
+    }
+
+    private byte[] readBytes(Part part)
+            throws IOException {
+
+        try (InputStream in = part.getInputStream()) {
+
+            ByteArrayOutputStream out =
+                    new ByteArrayOutputStream();
+
+            byte[] buffer =
+                    new byte[8192];
+
+            int lu;
+
+            while ((lu = in.read(buffer)) != -1) {
+                out.write(buffer, 0, lu);
+            }
+
+            return out.toByteArray();
+
+        }
 
     }
 
