@@ -10,6 +10,7 @@ import jakarta.servlet.ServletContextListener;
 
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
+import mg.itu.util.AuthChecker;
 import mg.itu.util.FrameworkConfig;
 import mg.itu.util.ScanAnnotation;
 
@@ -53,6 +54,10 @@ public class FrontControllerListener
             HashMap<UrlMethode, Mapping> mappings =
                     ScanAnnotation.generateMap(
                             basePackage);
+
+            // Sprint 10 : si une action est @Auth, la config d'auth
+            // (auth-session-key, role-session-key) doit exister
+            AuthChecker.validate(mappings);
 
             context.setAttribute(
                     "mapping",
