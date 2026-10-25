@@ -23,6 +23,8 @@ import mg.itu.http.MapFile;
 import mg.itu.http.MapSession;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
+import mg.itu.util.AuthChecker;
+import mg.itu.util.FrameworkConfig;
 import mg.itu.util.ObjectBinder;
 import mg.itu.view.ModelAndView;
 import com.google.gson.Gson;
@@ -137,6 +139,39 @@ public class FrontControllerServlet
 
         boolean isRestAPI =
                 method.isAnnotationPresent(RestAPI.class);
+
+        // Sprint 10 : @Auth verifie AVANT toute instanciation / binding /
+        // appel de l'action
+        AuthChecker.Resultat auth =
+                AuthChecker.check(request, mapping);
+
+        if (auth == AuthChecker.Resultat.NON_AUTHENTIFIE) {
+
+            String loginUrl =
+                    FrameworkConfig.get(AuthChecker.LOGIN_URL_PARAM);
+
+            if (!isRestAPI && loginUrl != null && !loginUrl.isEmpty()) {
+                response.sendRedirect(
+                        request.getContextPath() + loginUrl);
+            } else {
+                response.sendError(
+                        HttpServletResponse.SC_UNAUTHORIZED,
+                        "Authentification requise");
+            }
+
+            return;
+
+        }
+
+        if (auth == AuthChecker.Resultat.INTERDIT) {
+
+            response.sendError(
+                    HttpServletResponse.SC_FORBIDDEN,
+                    "Acces refuse : role insuffisant");
+
+            return;
+
+        }
 
         try {
 
