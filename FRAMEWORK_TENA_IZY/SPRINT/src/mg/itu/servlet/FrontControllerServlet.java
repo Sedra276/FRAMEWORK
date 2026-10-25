@@ -20,6 +20,7 @@ import jakarta.servlet.http.*;
 
 import mg.itu.http.HttpMethode;
 import mg.itu.http.MapFile;
+import mg.itu.http.MapSession;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
 import mg.itu.util.ObjectBinder;
@@ -259,6 +260,17 @@ public class FrontControllerServlet
                 extractFiles(request);
 
         for (int i = 0; i < parametres.length; i++) {
+
+            // Sprint 9 : MapSession ne vient pas du formulaire, c'est la
+            // session HTTP du navigateur qui a envoye la requete
+            if (parametres[i].getType() == MapSession.class) {
+
+                arguments[i] =
+                        new MapSession(request);
+
+                continue;
+
+            }
 
             arguments[i] =
                     ObjectBinder.bind(
