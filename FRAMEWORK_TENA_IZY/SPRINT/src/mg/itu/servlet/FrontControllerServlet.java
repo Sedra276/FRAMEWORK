@@ -24,6 +24,7 @@ import mg.itu.http.MapSession;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
 import mg.itu.util.AuthChecker;
+import mg.itu.util.ControllerFactory;
 import mg.itu.util.FrameworkConfig;
 import mg.itu.util.ObjectBinder;
 import mg.itu.view.ModelAndView;
@@ -156,13 +157,13 @@ public class FrontControllerServlet
             } else {
                 response.sendError(
                         HttpServletResponse.SC_UNAUTHORIZED,
-                        "Authentification requise");
+                        "La requete necessite une authentification");
             }
 
             return;
 
         }
-//pour les roles seulements le spetifique
+
         if (auth == AuthChecker.Resultat.INTERDIT) {
 
             response.sendError(
@@ -175,10 +176,10 @@ public class FrontControllerServlet
 
         try {
 
+            // Sprint 11 : nouvelle instance, ou instance unique si @Singleton
             Object controller =
-                    mapping.getControllerClass()
-                            .getDeclaredConstructor()
-                            .newInstance();
+                    ControllerFactory.get(
+                            mapping.getControllerClass());
 
             // Sprint 7/8 : on construit les arguments a partir des
             // parametres de la requete (formulaire, query string, fichiers)

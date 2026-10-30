@@ -11,6 +11,7 @@ import jakarta.servlet.ServletContextListener;
 import mg.itu.mapping.Mapping;
 import mg.itu.mapping.UrlMethode;
 import mg.itu.util.AuthChecker;
+import mg.itu.util.ControllerFactory;
 import mg.itu.util.FrameworkConfig;
 import mg.itu.util.ScanAnnotation;
 
@@ -77,6 +78,9 @@ public class FrontControllerListener
     @Override
     public void contextDestroyed(
             ServletContextEvent sce) {
+
+        // Sprint 11 : liberer les controleurs singleton
+        ControllerFactory.clear();
 
     }
 
