@@ -162,7 +162,7 @@ public class FrontControllerServlet
             return;
 
         }
-
+//pour les roles seulements le spetifique
         if (auth == AuthChecker.Resultat.INTERDIT) {
 
             response.sendError(
